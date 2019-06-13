@@ -18,6 +18,7 @@
 
 #include "lib/socklib.h"
 #include "common.h"
+#include "threadpool.h"
 
 extern int errno;
 
@@ -25,6 +26,7 @@ int   setup_listen(char *socketNumber);
 char *read_request(int fd);
 char *process_request(char *request, int *response_length);
 void  send_response(int fd, char *response, int response_length);
+void serve_request(void *arg);
 
 /**
 * This program should be invoked as "./server <socketnumber>", for
@@ -44,6 +46,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "(SERVER): for example, './server 4434'\n");
         exit(-1);
     }
+
+    threadpool tp = create_threadpool(50);
 
     /*
     * Set up the 'listening socket'.  This establishes a network
@@ -72,9 +76,6 @@ int main(int argc, char **argv)
     */
 
     while(1) {
-        char *request = NULL;
-        char *response = NULL;
-
         socket_talk = saccept(socket_listen);  // step 1
         if (socket_talk < 0) {
             fprintf(stderr, "An error occured in the server; a connection\n");
@@ -82,26 +83,34 @@ int main(int argc, char **argv)
             perror("");
             exit(1);
         }
-        request = read_request(socket_talk);  // step 2
-        if (request != NULL) {
-            int response_length;
-
-            response = process_request(request, &response_length);  // step 3
-            if (response != NULL) {
-                send_response(socket_talk, response, response_length);  // step 4
-            }
-        }
-        close(socket_talk);  // step 5
-
-        // clean up allocated memory, if any
-        if (request != NULL)
-        free(request);
-        if (response != NULL)
-        free(response);
+        dispatch(tp, serve_request, (void *) socket_listen);
     }
 }
 
+// Critical section
+void serve_request(void *arg){
+    char *request = NULL;
+    char *response = NULL;
 
+    int socket_talk = (int) arg;
+
+    request = read_request(socket_talk);  // step 2
+    if (request != NULL) {
+        int response_length;
+
+        response = process_request(request, &response_length);  // step 3
+        if (response != NULL) {
+            send_response(socket_talk, response, response_length);  // step 4
+        }
+    }
+    close(socket_talk);  // step 5
+
+    // clean up allocated memory, if any
+    if (request != NULL)
+        free(request);
+    if (response != NULL)
+        free(response);
+}
 
 /**
 * This function accepts a string of the form "5654", and opens up
