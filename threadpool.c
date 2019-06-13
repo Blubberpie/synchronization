@@ -21,7 +21,6 @@ typedef struct task_st {
 // _threadpool is the internal threadpool structure that is
 // cast to type "threadpool" before it given out to callers
 typedef struct _threadpool_st {
-    int thread_count;
     pthread_t *threads;
     pthread_mutex_t lock;
     pthread_cond_t occupied;
@@ -29,7 +28,6 @@ typedef struct _threadpool_st {
     int task_count;
     task_t* task_head;
     task_t* task_tail;
-    int terminate;
 } _threadpool;
 
 
@@ -41,19 +39,8 @@ void *worker_thread(void *args) {
         pthread_mutex_lock(&(pool->lock));
 
         while(pool->task_count == 0){
-            if (pool->terminate) {
-                pthread_mutex_unlock(&(pool->lock));
-                pthread_exit(NULL);
-            }
-
             pthread_mutex_unlock(&(pool->lock));
             pthread_cond_wait(&(pool->occupied), &(pool->lock));
-
-            // todo: this is ugly as hell
-            if (pool->terminate) {
-                pthread_mutex_unlock(&(pool->lock));
-                pthread_exit(NULL);
-            }
         }
 
         task_t *current_task = pool->task_head;
@@ -64,7 +51,7 @@ void *worker_thread(void *args) {
             pool->task_tail = NULL;
         }else pool->task_head = current_task->next;
 
-        if(pool->task_count == 0 && !pool->terminate){
+        if(pool->task_count == 0){
             pthread_cond_signal(&(pool->empty));
         }
 
@@ -91,10 +78,8 @@ threadpool create_threadpool(int num_threads_in_pool) {
     // allocate thread pool with num_threads_in_pool
     pool->threads = (pthread_t*) malloc(sizeof(pthread_t) * num_threads_in_pool);
 
-    pool->thread_count = num_threads_in_pool;
     pool->task_head = NULL;
     pool->task_tail = NULL;
-    pool->terminate = 0;
     pthread_mutex_init(&pool->lock, NULL);
     pthread_cond_init(&pool->occupied, NULL);
     pthread_cond_init(&pool->empty, NULL);
