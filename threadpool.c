@@ -24,20 +24,18 @@ typedef struct _threadpool_st {
     int thread_count;
     pthread_t *threads;
     pthread_mutex_t lock;
-    pthread_cond_t busy;
     pthread_cond_t occupied;
     pthread_cond_t empty;
     int task_count;
     task_t* task_head;
     task_t* task_tail;
-    int deny_incoming;
     int terminate;
 } _threadpool;
 
 
 void *worker_thread(void *args) {
 
-    _threadpool *pool = (_threadpool *) args; //todo: suspicious..
+    _threadpool *pool = (_threadpool *) args;
 
     while (1) {
         pthread_mutex_lock(&(pool->lock));
@@ -93,19 +91,11 @@ threadpool create_threadpool(int num_threads_in_pool) {
     // allocate thread pool with num_threads_in_pool
     pool->threads = (pthread_t*) malloc(sizeof(pthread_t) * num_threads_in_pool);
 
-    // todo: need?
-    if(!pool->threads) {
-        fprintf(stderr, "Out of memory creating a new threadpool!\n");
-        return NULL;
-    }
-
     pool->thread_count = num_threads_in_pool;
     pool->task_head = NULL;
     pool->task_tail = NULL;
     pool->terminate = 0;
-    pool->deny_incoming = 0;
-    pthread_mutex_init(&pool->lock, NULL); // todo: (void) ???
-    pthread_cond_init(&pool->busy, NULL);
+    pthread_mutex_init(&pool->lock, NULL);
     pthread_cond_init(&pool->occupied, NULL);
     pthread_cond_init(&pool->empty, NULL);
 
@@ -124,7 +114,7 @@ void dispatch(threadpool from_me, dispatch_fn dispatch_to_here,
 
     task_t *current_task = (task_t*) malloc(sizeof(task_t));
 
-    if (current_task == NULL) return; // Can't create task struct
+    if (current_task == NULL) return; // Unable to create task struct
 
     current_task->function = dispatch_to_here;
     current_task->arg = arg;
@@ -132,16 +122,11 @@ void dispatch(threadpool from_me, dispatch_fn dispatch_to_here,
 
     pthread_mutex_lock(&(pool->lock));
 
-    if(pool->deny_incoming) {
-        free(current_task);
-        return;
-    }
-
     if (pool->task_count == 0){
         pool->task_head = current_task;
         pool->task_tail = current_task;
         pthread_cond_signal(&pool->occupied);
-    }else{ // todo: check
+    }else{
         pool->task_tail->next = current_task;
         pool->task_tail = current_task;
     }
@@ -153,21 +138,9 @@ void dispatch(threadpool from_me, dispatch_fn dispatch_to_here,
 void destroy_threadpool(threadpool destroyme) {
     _threadpool *pool = (_threadpool *) destroyme;
 
-//    pthread_mutex_lock(&(pool->lock));
-//
-//    pool->deny_incoming = 1;
-//    while(pool->task_count != 0){
-//      pthread_cond_wait(&(pool->empty), &(pool->lock));
-//    }
-//    pool->terminate = 1;
-//    pthread_cond_broadcast(&(pool->occupied));
-//
-//    pthread_mutex_unlock(&(pool->lock));
-
     pthread_mutex_destroy(&(pool->lock));
     pthread_cond_destroy(&(pool->empty));
     pthread_cond_destroy(&(pool->occupied));
-    pthread_cond_destroy(&(pool->busy));
     free(pool->threads);
     free(pool);
 }
