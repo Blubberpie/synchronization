@@ -30,6 +30,7 @@ typedef struct _threadpool_st {
     int task_count;
     task_t* task_head;
     task_t* task_tail;
+    int deny_incoming;
     int terminate;
 } _threadpool;
 
@@ -77,45 +78,45 @@ void *worker_thread(void *args) {
 
 
 threadpool create_threadpool(int num_threads_in_pool) {
-  _threadpool *pool;
+    _threadpool *pool;
 
-  // sanity check the argument
-  if ((num_threads_in_pool <= 0) || (num_threads_in_pool > MAXT_IN_POOL))
+    // sanity check the argument
+    if ((num_threads_in_pool <= 0) || (num_threads_in_pool > MAXT_IN_POOL))
     return NULL;
 
-  pool = (_threadpool *) malloc(sizeof(_threadpool));
-  if (pool == NULL) {
+    pool = (_threadpool *) malloc(sizeof(_threadpool));
+    if (pool == NULL) {
     fprintf(stderr, "Out of memory creating a new threadpool!\n");
     return NULL;
-  }
+    }
 
-  // allocate thread pool with num_threads_in_pool
-  pool->threads = (pthread_t*) malloc(sizeof(pthread_t) * num_threads_in_pool);
+    // allocate thread pool with num_threads_in_pool
+    pool->threads = (pthread_t*) malloc(sizeof(pthread_t) * num_threads_in_pool);
 
-  // todo: if(!pool->threads) out of memory blah blah
+    // todo: if(!pool->threads) out of memory blah blah
 
-  pool->thread_count = num_threads_in_pool;
-  pool->task_head = NULL;
-  pool->task_tail = NULL;
-  pool->terminate = 0;
-  pthread_mutex_init(&pool->lock, NULL); // todo: (void) ???
-  pthread_cond_init(&pool->busy, NULL);
-  pthread_cond_init(&pool->occupied, NULL);
-  pthread_cond_init(&pool->empty, NULL);
+    pool->thread_count = num_threads_in_pool;
+    pool->task_head = NULL;
+    pool->task_tail = NULL;
+    pool->terminate = 0;
+    pool->deny_incoming = 0;
+    pthread_mutex_init(&pool->lock, NULL); // todo: (void) ???
+    pthread_cond_init(&pool->busy, NULL);
+    pthread_cond_init(&pool->occupied, NULL);
+    pthread_cond_init(&pool->empty, NULL);
 
-  int i;
-  for(i = 0; i < num_threads_in_pool; i++){
+    for(int i = 0; i < num_threads_in_pool; i++){
       int error = pthread_create(&(pool->threads[i]), NULL, worker_thread, pool);
       if (error) return NULL; // Thread couldn't be created
-  }
+    }
 
-  return (threadpool) pool;
+    return (threadpool) pool;
 }
 
 
 void dispatch(threadpool from_me, dispatch_fn dispatch_to_here,
 	      void *arg) {
-  _threadpool *pool = (_threadpool *) from_me;
+    _threadpool *pool = (_threadpool *) from_me;
 
     task_t *current_task = (task_t*) malloc(sizeof(task_t));
 
@@ -126,6 +127,11 @@ void dispatch(threadpool from_me, dispatch_fn dispatch_to_here,
     current_task->next = NULL;
 
     pthread_mutex_lock(&(pool->lock));
+
+    if(pool->deny_incoming) {
+        free(current_task);
+        return;
+    }
 
     if (pool->task_count == 0){
         pool->task_head = current_task;
@@ -141,7 +147,23 @@ void dispatch(threadpool from_me, dispatch_fn dispatch_to_here,
 }
 
 void destroy_threadpool(threadpool destroyme) {
-  _threadpool *pool = (_threadpool *) destroyme;
+    _threadpool *pool = (_threadpool *) destroyme;
 
-  // add your code here to kill a threadpool
+    pthread_mutex_lock(&(pool->lock));
+
+    pool->deny_incoming = 1;
+    while(pool->task_count != 0){
+      pthread_cond_wait(&(pool->empty), &(pool->lock));
+    }
+    pool->terminate = 1;
+    pthread_cond_broadcast(&(pool->occupied));
+
+    pthread_mutex_unlock(&(pool->lock));
+
+    pthread_mutex_destroy(&(pool->lock));
+    pthread_cond_destroy(&(pool->empty));
+    pthread_cond_destroy(&(pool->empty));
+    pthread_cond_destroy(&(pool->empty));
+    free(pool->threads);
+    free(pool);
 }
