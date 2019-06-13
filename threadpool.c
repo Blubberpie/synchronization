@@ -30,16 +30,48 @@ typedef struct _threadpool_st {
     int task_count;
     task_t* task_head;
     task_t* task_tail;
+    int terminate;
 } _threadpool;
 
 
 void *worker_thread(void *args) {
+
+    _threadpool *pool = (_threadpool *) args; //todo: suspicious..
+
     while (1) {
-        // wait for a signal
-        // l
-        // mark itself as busy
-        // run a given function
-        //
+        pthread_mutex_lock(&(pool->lock));
+
+        while(pool->task_count == 0){
+            if (pool->terminate) {
+                pthread_mutex_unlock(&(pool->lock));
+                pthread_exit(NULL);
+            }
+
+            pthread_mutex_unlock(&(pool->lock));
+            pthread_cond_wait(&(pool->occupied), &(pool->lock));
+
+            // todo: this is ugly as hell
+            if (pool->terminate) {
+                pthread_mutex_unlock(&(pool->lock));
+                pthread_exit(NULL);
+            }
+        }
+
+        task_t *current_task = pool->task_head;
+        pool->task_count--;
+
+        if(pool->task_count == 0){
+            pool->task_head = NULL;
+            pool->task_tail = NULL;
+        }else pool->task_head = current_task->next;
+
+        if(pool->task_count == 0 && !pool->terminate){
+            pthread_cond_signal(&(pool->empty));
+        }
+
+        pthread_mutex_unlock(&(pool->lock));
+        (current_task->function) (current_task->arg);
+        free(current_task);
     }
 }
 
@@ -65,6 +97,7 @@ threadpool create_threadpool(int num_threads_in_pool) {
   pool->thread_count = num_threads_in_pool;
   pool->task_head = NULL;
   pool->task_tail = NULL;
+  pool->terminate = 0;
   pthread_mutex_init(&pool->lock, NULL); // todo: (void) ???
   pthread_cond_init(&pool->busy, NULL);
   pthread_cond_init(&pool->occupied, NULL);
