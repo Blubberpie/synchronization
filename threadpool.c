@@ -76,17 +76,19 @@ threadpool create_threadpool(int num_threads_in_pool) {
     }
 
     // allocate thread pool with num_threads_in_pool
-    pool->threads = (pthread_t*) malloc(sizeof(pthread_t) * num_threads_in_pool);
+    pool->threads = (pthread_t *) malloc(sizeof(pthread_t) * num_threads_in_pool);
+
+    if (!(pool->threads)) return NULL;
 
     pool->task_head = NULL;
     pool->task_tail = NULL;
-    pthread_mutex_init(&pool->lock, NULL);
-    pthread_cond_init(&pool->occupied, NULL);
-    pthread_cond_init(&pool->empty, NULL);
+    pthread_mutex_init(&(pool->lock), NULL);
+    pthread_cond_init(&(pool->occupied), NULL);
+    pthread_cond_init(&(pool->empty), NULL);
 
     for(int i = 0; i < num_threads_in_pool; i++){
-      int error = pthread_create(&(pool->threads[i]), NULL, worker_thread, pool);
-      if (error) return NULL; // Thread couldn't be created
+        int error = pthread_create(&(pool->threads[i]), NULL, worker_thread, pool);
+        if (error) return NULL; // Thread couldn't be created
     }
 
     return (threadpool) pool;
@@ -96,8 +98,9 @@ threadpool create_threadpool(int num_threads_in_pool) {
 void dispatch(threadpool from_me, dispatch_fn dispatch_to_here,
 	      void *arg) {
     _threadpool *pool = (_threadpool *) from_me;
+    task_t *current_task;
 
-    task_t *current_task = (task_t*) malloc(sizeof(task_t));
+    current_task = (task_t*) malloc(sizeof(task_t));
 
     if (current_task == NULL) return; // Unable to create task struct
 
@@ -110,7 +113,7 @@ void dispatch(threadpool from_me, dispatch_fn dispatch_to_here,
     if (pool->task_count == 0){
         pool->task_head = current_task;
         pool->task_tail = current_task;
-        pthread_cond_signal(&pool->occupied);
+        pthread_cond_signal(&(pool->occupied));
     }else{
         pool->task_tail->next = current_task;
         pool->task_tail = current_task;
