@@ -11,10 +11,24 @@
 
 #include "threadpool.h"
 
+// A queue of functions to be executed
+typedef struct _function_st {
+    void (*task) (void*); // The function to be executed
+    void *arg;
+    struct _function_st* next;
+} _function_t;
+
 // _threadpool is the internal threadpool structure that is
 // cast to type "threadpool" before it given out to callers
 typedef struct _threadpool_st {
-   // you should fill in this structure with whatever you need
+    int max_threads;
+    int min_threads;
+    int thread_count;
+    pthread_t *threads;
+    pthread_mutex_t lock;
+    int function_count;
+    _function_t task_head;
+    _function_t task_tail;
 } _threadpool;
 
 
