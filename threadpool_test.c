@@ -45,7 +45,8 @@ int main(int argc, char **argv) {
   dispatch(tp, dispatch_to_me, (void *) 7);
 
   fprintf(stdout, "**main done second\n");
-  sleep(20);
-  exit(-1);
+    sleep(20);
+    destroy_threadpool(tp);
+    exit(-1);
 }
 
