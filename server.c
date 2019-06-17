@@ -50,8 +50,6 @@ int main(int argc, char **argv)
         exit(-1);
     }
 
-    threadpool tp = create_threadpool(threads_in_pool);
-
     /*
     * Set up the 'listening socket'.  This establishes a network
     * IP_address:port_number that other programs can connect with.
@@ -60,6 +58,8 @@ int main(int argc, char **argv)
 
     threads_in_pool = strtol(argv[2], NULL, 10);
     NUM_LOOPS = strtol(argv[3], NULL, 10);
+
+    threadpool tp = create_threadpool(threads_in_pool);
 
     /*
     * Here's the main loop of our program.  Inside the loop, the
