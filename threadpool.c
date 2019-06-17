@@ -24,7 +24,7 @@ typedef struct _threadpool_st {
     int num_threads_in_pool;
     pthread_t *threads;
     pthread_mutex_t lock;
-    pthread_cond_t occupied;
+    pthread_cond_t occupied; // todo: one condition variable?
     pthread_cond_t empty;
     int terminate;
     int task_count;
@@ -40,16 +40,11 @@ void *worker_thread(void *args) {
         pthread_mutex_lock(&(pool->lock));
 
         // Wait if there are no tasks
-        while(pool->task_count == 0){
-
-            if(pool->terminate){
-                pthread_mutex_unlock(&(pool->lock));
-                pthread_exit(NULL);
-            }
-
-            pthread_mutex_unlock(&(pool->lock));
+        while(pool->task_count == 0 && !(pool->terminate)){
             pthread_cond_wait(&(pool->occupied), &(pool->lock));
         }
+
+        if(pool->terminate) break;
 
         task_t *current_task = pool->task_head;
         pool->task_count--;
@@ -64,9 +59,14 @@ void *worker_thread(void *args) {
         }
 
         pthread_mutex_unlock(&(pool->lock));
+
+        /* Execute task */
         (current_task->function) (current_task->arg);
         free(current_task);
     }
+
+    pthread_mutex_unlock(&(pool->lock));
+    pthread_exit(NULL);
 }
 
 

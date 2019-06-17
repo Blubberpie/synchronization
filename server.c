@@ -77,8 +77,6 @@ int main(int argc, char **argv)
 
     while(1) {
         socket_talk = saccept(socket_listen);  // step 1
-//        printf("listen: %d\n", socket_listen);
-//        printf("talk: %d\n", socket_talk);
         if (socket_talk < 0) {
             fprintf(stderr, "An error occurred in the server; a connection\n");
             fprintf(stderr, "failed because of ");
