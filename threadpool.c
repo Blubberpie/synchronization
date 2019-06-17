@@ -24,7 +24,7 @@ typedef struct _threadpool_st {
     int num_threads_in_pool;
     pthread_t *threads;
     pthread_mutex_t lock;
-    pthread_cond_t occupied; // todo: one condition variable?
+    pthread_cond_t occupied;
     pthread_cond_t empty;
     int terminate;
     int task_count;

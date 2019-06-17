@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <errno.h>
+#include <sys/time.h>
 
 #include "lib/socklib.h"
 #include "common.h"
@@ -30,6 +31,12 @@ void serve_request(void *arg);
 
 int NUM_LOOPS;
 int threads_in_pool;
+int num_dispatches_called;
+
+struct timeval prev_time;
+struct timeval curr_time;
+
+#define PRINT_EVERY 100
 
 /**
 * This program should be invoked as "./server <socketnumber>", for
@@ -38,6 +45,8 @@ int threads_in_pool;
 
 int main(int argc, char **argv)
 {
+    gettimeofday(&prev_time, NULL);
+
     char buf[1000];
     int  socket_listen;
     int  socket_talk;
@@ -60,6 +69,7 @@ int main(int argc, char **argv)
     NUM_LOOPS = strtol(argv[3], NULL, 10);
 
     threadpool tp = create_threadpool(threads_in_pool);
+    num_dispatches_called = 0;
 
     /*
     * Here's the main loop of our program.  Inside the loop, the
@@ -89,12 +99,23 @@ int main(int argc, char **argv)
             perror("");
             exit(1);
         }
-        dispatch(tp, serve_request, (void *) &socket_listen);
+        dispatch(tp, serve_request, (void *) socket_talk);
     }
 }
 
 // Critical section
 void serve_request(void *arg){
+
+    num_dispatches_called++;
+    if(num_dispatches_called == PRINT_EVERY){
+        struct timeval duration;
+        gettimeofday(&curr_time, NULL);
+        timersub(&curr_time, &prev_time, &duration);
+        printf("%lf\n", PRINT_EVERY/(duration.tv_sec + (duration.tv_usec / 1000000.0 )));
+        prev_time = curr_time;
+        num_dispatches_called = 0;
+    }
+
     char *request = NULL;
     char *response = NULL;
 
@@ -170,7 +191,7 @@ char *process_request(char *request, int *response_length) {
     // just do some mindless character munging here
 
     for (i=0; i<RESPONSE_SIZE; i++)
-    response[i] = request[i%REQUEST_SIZE];
+        response[i] = request[i%REQUEST_SIZE];
 
     for (j=0; j<NUM_LOOPS; j++) {
         for (i=0; i<RESPONSE_SIZE; i++) {
