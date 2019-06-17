@@ -28,6 +28,9 @@ char *process_request(char *request, int *response_length);
 void  send_response(int fd, char *response, int response_length);
 void serve_request(void *arg);
 
+int NUM_LOOPS;
+int threads_in_pool;
+
 /**
 * This program should be invoked as "./server <socketnumber>", for
 * example, "./server 4342".
@@ -40,20 +43,23 @@ int main(int argc, char **argv)
     int  socket_talk;
     int  dummy, len;
 
-    if (argc != 2)
+    if (argc != 4)
     {
-        fprintf(stderr, "(SERVER): Invoke as  './server socknum'\n");
-        fprintf(stderr, "(SERVER): for example, './server 4434'\n");
+        fprintf(stderr, "(SERVER): Invoke as  './server socknum [# threads_in_pool] [NUM_LOOPS]'\n");
+        fprintf(stderr, "(SERVER): for example, './server 4434 2 100'\n");
         exit(-1);
     }
 
-    threadpool tp = create_threadpool(50);
+    threadpool tp = create_threadpool(threads_in_pool);
 
     /*
     * Set up the 'listening socket'.  This establishes a network
     * IP_address:port_number that other programs can connect with.
     */
     socket_listen = setup_listen(argv[1]);
+
+    threads_in_pool = strtol(argv[2], NULL, 10);
+    NUM_LOOPS = strtol(argv[3], NULL, 10);
 
     /*
     * Here's the main loop of our program.  Inside the loop, the
@@ -92,7 +98,7 @@ void serve_request(void *arg){
     char *request = NULL;
     char *response = NULL;
 
-    int socket_talk = *((int *) arg);
+    int socket_talk = (int) arg;
 
     request = read_request(socket_talk);  // step 2
     if (request != NULL) {
@@ -156,8 +162,6 @@ char *read_request(int fd) {
 * This is where all of the hard work happens.
 * This function is thread-safe.
 */
-
-#define NUM_LOOPS 500000
 
 char *process_request(char *request, int *response_length) {
     char *response = (char *) malloc(RESPONSE_SIZE*sizeof(char));
